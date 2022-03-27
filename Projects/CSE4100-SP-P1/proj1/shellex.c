@@ -14,7 +14,7 @@ int main()
 
     while (1) {
 	/* Read */
-	printf("> ");                   
+	printf("CSE4100-SP-P1> ");                   
 	fgets(cmdline, MAXLINE, stdin); 
 	if (feof(stdin))
 	    exit(0);
@@ -39,17 +39,21 @@ void eval(char *cmdline)
     if (argv[0] == NULL)  
 	return;   /* Ignore empty lines */
     if (!builtin_command(argv)) { //quit -> exit(0), & -> ignore, other -> run
-        if (execve(argv[0], argv, environ) < 0) {	//ex) /bin/ls ls -al &
-            printf("%s: Command not found.\n", argv[0]);
-            exit(0);
-        }
+		if((pid = Fork()) == 0) {
+			if (execvp(argv[0], argv) < 0)/* (execve(argv[0], argv, environ) < 0)*/ {	//ex) /bin/ls ls -al &
+				printf("%s: Command not found.\n", argv[0]);
+				exit(0);
+			}
+		}
 
 	/* Parent waits for foreground job to terminate */
-	if (!bg){ 
-	    int status;
-	}
-	else//when there is backgrount process!
-	    printf("%d %s", pid, cmdline);
+		if (!bg){ 
+		    int status;
+			if (waitpid(pid, &status, 0) < 0)
+				unix_error("watfg: waitpid error");
+		}
+		else//when there is backgrount process!
+			printf("%d %s", pid, cmdline);
     }
     return;
 }
