@@ -10,4 +10,3 @@ myshell: myshell.c csapp.c
 
 clean:
 	rm -rf *~ $(PROGS)
-
