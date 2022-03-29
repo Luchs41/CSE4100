@@ -6,7 +6,7 @@ PROGS = myshell
 
 all: $(PROGS)
 
-myshell: myshell.c csapp.c
+myshell: myshell.c
 
 clean:
 	rm -rf *~ $(PROGS)
