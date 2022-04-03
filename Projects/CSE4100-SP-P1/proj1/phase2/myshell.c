@@ -60,9 +60,7 @@ void eval(char *cmdline)
 			bg = parseline(pcmd[i], argv[i]);
 		}
 		argv[pipe_num][0] = NULL;
-		printf("%s / %s\n", argv[0][0], argv[0][1]);
 		pipe_command(argv, 0, STDIN_FILENO);
-
 	}
 	else {
 		bg = parseline(buf, argv[0]); 
@@ -147,11 +145,12 @@ void pipe_command(char *argv[][MAXARGS], int pos, int input_fd) {
 		Dup2(input_fd, STDIN_FILENO);
 		Close(input_fd);
 		if(!builtin_command(argv[pos])) {
-			if(execve(strcat(path, argv[pos][0]), argv[pos], environ) < 0 && execve(strcat(path2, argv[pos][0]), argv[pos], environ)) {
+			if((execve(strcat(path, argv[pos][0]), argv[pos], environ) < 0) && (execve(strcat(path2, argv[pos][0]), argv[pos], environ) < 0)) {
 				printf("%s: Command not found.\n", argv[pos][0]);
 				exit(0);
 			}
 		}
+		return ;
 		//exit(0);
 	}
 	else {
