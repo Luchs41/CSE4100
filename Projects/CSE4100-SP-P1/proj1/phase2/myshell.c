@@ -59,7 +59,13 @@ void eval(char *cmdline)
 			bg = parseline(pcmd[i], argv[i]);
 		}
 		argv[pipe_num][0] = NULL;
-		pipe_command(argv, 0, STDIN_FILENO);
+		if((pid = Fork()) == 0) {
+			pipe_command(argv, 0, STDIN_FILENO);
+		}
+		int status;
+		if(waitpid(pid, &status, 0) <0) {
+			unix_error("waitfg: waitpid error");
+		}
 	}
 	else {
 		bg = parseline(buf, argv[0]); 
@@ -77,7 +83,7 @@ void eval(char *cmdline)
 			if (!bg){ 
 				int status;
 				if (waitpid(pid, &status, 0) < 0)
-					unix_error("watfg: waitpid error");
+					unix_error("waitfg: waitpid error");
 			}
 			else//when there is backgrount process!
 				printf("%d %s", pid, cmdline);
@@ -97,6 +103,7 @@ int builtin_command(char **argv)
 		if(chdir(argv[1]) < 0) printf("cd : No such file or directory\n");
 		return 1;
 	}
+	printf("Not builtin\n");
 	return 0;                     /* Not a builtin command */
 }
 /* $end eval */
@@ -149,8 +156,7 @@ void pipe_command(char *argv[][MAXARGS], int pos, int input_fd) {
 				exit(0);
 			}
 		}
-		return ;
-		//exit(0);
+		exit(0);
 	}
 	else {
 		pipe_ret = pipe(fd);
@@ -173,7 +179,7 @@ void pipe_command(char *argv[][MAXARGS], int pos, int input_fd) {
 					exit(0);
 				}
 			}
-			//exit(0);
+			exit(0);
 		}
 		
 		int status;
