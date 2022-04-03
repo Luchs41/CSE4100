@@ -68,7 +68,7 @@ int builtin_command(char **argv)
 		exit(0);  
 	if (!strcmp(argv[0], "&"))    /* Ignore singleton & */
 		return 1;
-	if(!strcmp(argv[0], "cd")) {
+	if(!strcmp(argv[0], "cd")) {	/* Change directory */
 		if(chdir(argv[1]) < 0) printf("cd : No such file or directory\n");
 		return 1;
 	}
@@ -81,6 +81,7 @@ int builtin_command(char **argv)
 int parseline(char *buf, char **argv) 
 {
 	char *delim;         /* Points to first space delimiter */
+	char *pipe;			 /* Points to the pipe character */
 	int argc;            /* Number of args */
 	int bg;              /* Background job? */
 
