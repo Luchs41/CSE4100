@@ -67,7 +67,7 @@ void eval(char *cmdline)
 			return;   /* Ignore empty lines */
 		if (!builtin_command(argv[0])) { //quit -> exit(0), & -> ignore, other -> run
 			if((pid = Fork()) == 0) {
-				if(execve(strcat(path, argv[0][0]), argv[0], environ) < 0 && execve(strcat(path2, argv[0][0]), argv[0], environ) < 0) {	//ex) /bin/ls ls -al &
+				if((execve(strcat(path, argv[0][0]), argv[0], environ) < 0) && (execve(strcat(path2, argv[0][0]), argv[0], environ) < 0)) {	//ex) /bin/ls ls -al &
 					printf("%s: Command not found.\n", argv[0][0]);
 					exit(0);
 				}
@@ -168,7 +168,7 @@ void pipe_command(char *argv[][MAXARGS], int pos, int input_fd) {
 			Close(fd[1]);
 			
 			if(!builtin_command(argv[pos])) {
-				if(execve(strcat(path, argv[pos][0]), argv[pos], environ) < 0 && execve(strcat(path2, argv[pos][0]), argv[pos], environ) < 0) {
+				if((execve(strcat(path, argv[pos][0]), argv[pos], environ) < 0) && (execve(strcat(path2, argv[pos][0]), argv[pos], environ) < 0)) {
 					printf("%s: Command not found.\n", argv[pos][0]);
 					exit(0);
 				}
