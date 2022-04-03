@@ -25,7 +25,6 @@ int main()
 		}
 		/* Evaluate */
 		eval(cmdline);
-		printf("eval end\n");
 	}
 }
 /* $end shellmain */
