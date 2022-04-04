@@ -50,10 +50,11 @@ void eval(char *cmdline)
 		while((pipe = strchr(temp, '|'))) {
 			*pipe = '\0';
 			strcpy(pcmd[pipe_num], temp);
-			strcat(pcmd[pipe_num], "\0");
+			strcat(pcmd[pipe_num], "\n");
 			pipe_num++;
 			temp = pipe + 1;
 		}
+		pcmd[pipe_num - 1][strlen(pcmd[pipe_num - 1]) - 1] = '\0';
 		pcmd[pipe_num][0] = '\0';
 		for(int i = 0; pcmd[i][0] != '\0'; i++) {
 			bg = parseline(pcmd[i], argv[i]);
@@ -103,7 +104,6 @@ int builtin_command(char **argv)
 		if(chdir(argv[1]) < 0) printf("cd : No such file or directory\n");
 		return 1;
 	}
-	printf("Not builtin\n");
 	return 0;                     /* Not a builtin command */
 }
 /* $end eval */
@@ -115,12 +115,17 @@ int parseline(char *buf, char **argv)
 	char *delim;         /* Points to first space delimiter */
 	int argc;            /* Number of args */
 	int bg;              /* Background job? */
+	
+	for(int i = 0; i < strlen(buf); i++) {
+		if(buf[i] == '\"' || buf[i] == '\'') buf[i] = ' ';
+	}
 
 	buf[strlen(buf)-1] = ' ';  /* Replace trailing '\n' with space */
 	while (*buf && (*buf == ' ')) /* Ignore leading spaces */
 		buf++;
 	/* Build the argv list */
 	argc = 0;
+
 	while ((delim = strchr(buf, ' '))) {
 		argv[argc++] = buf;
 		*delim = '\0';
