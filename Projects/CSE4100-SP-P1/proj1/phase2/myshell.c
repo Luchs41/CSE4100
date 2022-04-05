@@ -10,21 +10,28 @@ void eval(char *cmdline);
 int parseline(char *buf, char **argv);
 int builtin_command(char **argv); 
 void pipe_command(char *argv[][MAXARGS], int pos, int input_fd);
+void shellINThandler(int sig);	/* handler to ignore Ctrl+C, Ctrl+Z */
+int flag;
 
 int main() 
 {
+	flag = 0;
+	char *fgetsR;
 	char cmdline[MAXLINE]; /* Command line */
 	strcpy(path, "/bin/");
 	strcpy(path2, "/usr/bin/");
+	signal(SIGTSTP, shellINThandler);
 	while (1) {
 		/* Read */
-		printf("CSE4100-SP-P1> ");                   
-		fgets(cmdline, MAXLINE, stdin); 
+		//signal(SIGINT, shellINThandler);
+		printf("CSE4100-SP-P1> ");
+		fgetsR = fgets(cmdline, MAXLINE, stdin);
 		if (feof(stdin)) {
 			exit(0);
 		}
 		/* Evaluate */
 		eval(cmdline);
+
 	}
 }
 /* $end shellmain */
@@ -115,17 +122,14 @@ int parseline(char *buf, char **argv)
 	char *delim;         /* Points to first space delimiter */
 	int argc;            /* Number of args */
 	int bg;              /* Background job? */
-	
-	for(int i = 0; i < strlen(buf); i++) {
-		if(buf[i] == '\"' || buf[i] == '\'') buf[i] = ' ';
-	}
-
+	char *temp;
+	temp = buf;
 	buf[strlen(buf)-1] = ' ';  /* Replace trailing '\n' with space */
 	while (*buf && (*buf == ' ')) /* Ignore leading spaces */
 		buf++;
 	/* Build the argv list */
 	argc = 0;
-
+	//printf("%s\n", temp);
 	while ((delim = strchr(buf, ' '))) {
 		argv[argc++] = buf;
 		*delim = '\0';
@@ -134,7 +138,10 @@ int parseline(char *buf, char **argv)
 			buf++;
 	}
 	argv[argc] = NULL;
-
+	//	for(int i = 0; i < strlen(buf); i++) {
+	//		if(buf[i] == '\"' || buf[i] == '\'') buf[i] = ' ';
+	//	}
+	//printf("%s\n", argv[1]);
 	if (argc == 0)  /* Ignore blank line */
 		return 1;
 
@@ -143,7 +150,7 @@ int parseline(char *buf, char **argv)
 		argv[--argc] = NULL;
 
 	return bg;
-	
+
 }
 /* $end parseline */
 
@@ -177,7 +184,7 @@ void pipe_command(char *argv[][MAXARGS], int pos, int input_fd) {
 			}
 			Dup2(fd[1], STDOUT_FILENO);
 			Close(fd[1]);
-			
+
 			if(!builtin_command(argv[pos])) {
 				if((execve(strcat(path, argv[pos][0]), argv[pos], environ) < 0) && (execve(strcat(path2, argv[pos][0]), argv[pos], environ) < 0)) {
 					printf("%s: Command not found.\n", argv[pos][0]);
@@ -186,11 +193,16 @@ void pipe_command(char *argv[][MAXARGS], int pos, int input_fd) {
 			}
 			exit(0);
 		}
-		
+
 		int status;
 		Close(fd[1]);
 		pipe_command(argv, pos + 1, fd[0]);
 		if(waitpid(pid, &status, 0) < 0)
-			unix_error("watfg: waitpid error");
+			unix_error("waitfg: waitpid error");
 	}
+}
+
+void shellINThandler(int sig) {
+	//puts("");
+	printf("\nCSE4100-SP-P1> \n");
 }
