@@ -39,7 +39,6 @@ void eval(char *cmdline)
 	char buf[MAXLINE];   /* Holds modified command line */
 	int bg;              /* Should the job run in bg or fg? */
 	pid_t pid;           /* Process id */
-	char path[MAXLINE];
 	
 	strcpy(buf, cmdline);
 
@@ -86,12 +85,10 @@ int builtin_command(char **argv)
 int parseline(char *buf, char **argv) 
 {
 	char *delim;         /* Points to first space delimiter */
+	char *quotes;		 /* Points to the quotes  */
 	int argc;            /* Number of args */
 	int bg;              /* Background job? */
 	
-	for(int i = 0; i < strlen(buf); i++) {
-		if(buf[i] == '\"' || buf[i] == '\'') buf[i] = ' ';
-	}
 
 	buf[strlen(buf)-1] = ' ';  /* Replace trailing '\n' with space */
 	while (*buf && (*buf == ' ')) /* Ignore leading spaces */
@@ -100,6 +97,11 @@ int parseline(char *buf, char **argv)
 	/* Build the argv list */
 	argc = 0;
 	while ((delim = strchr(buf, ' '))) {
+		if(*buf == '\"') {
+			buf += 1;
+			quotes = strchr(buf, '\"');
+			delim = quotes;
+		}
 		argv[argc++] = buf;
 		*delim = '\0';
 		buf = delim + 1;

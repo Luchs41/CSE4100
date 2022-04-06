@@ -140,11 +140,6 @@ int parseline(char *buf, char **argv)
 			buf++;
 	}
 	argv[argc] = NULL;
-	int i = 0;
-	while(argv[i]) {
-		printf("%s\n", argv[i]);
-		i++;
-	}
 	if (argc == 0)  /* Ignore blank line */
 		return 1;
 
