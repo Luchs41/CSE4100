@@ -3,7 +3,8 @@
 #include "myshell.h"
 #include<errno.h>
 #define MAXARGS   128
-
+char path[MAXLINE];		/* Default command path : /bin/ */
+char path2[MAXLINE];	/* Default command path : /usr/bin */
 /* Function prototypes */
 void eval(char *cmdline);
 int parseline(char *buf, char **argv);
@@ -13,7 +14,10 @@ void shellINThandler(int sig); /* handler to ignore Ctrl+c, Ctrl+z */
 int main() 
 {
 	char cmdline[MAXLINE]; /* Command line */
-	
+	strcpy(path, "/bin/");
+	strcpy(path2, "/usr/bin/");
+	signal(SIGTSTP, shellINThandler);
+	signal(SIGINT, shellINThandler);
 	while (1) {
 		/* Read */
 		printf("CSE4100-SP-P1> ");                   
@@ -36,7 +40,7 @@ void eval(char *cmdline)
 	int bg;              /* Should the job run in bg or fg? */
 	pid_t pid;           /* Process id */
 	char path[MAXLINE];
-	strcpy(path, "/bin/");
+	
 	strcpy(buf, cmdline);
 
 	bg = parseline(buf, argv); 
@@ -44,7 +48,7 @@ void eval(char *cmdline)
 		return;   /* Ignore empty lines */
 	if (!builtin_command(argv)) { //quit -> exit(0), & -> ignore, other -> run
 		if((pid = Fork()) == 0) {
-			if(execve(strcat(path, argv[0]), argv, environ) < 0) {	//ex) /bin/ls ls -al &
+			if((execve(strcat(path, argv[0]), argv, environ) < 0) && (execve(strcat(path2, argv[0]), argv, environ) < 0)) {	//ex) /bin/ls ls -al &
 				printf("%s: Command not found.\n", argv[0]);
 				exit(0);
 			}
@@ -115,4 +119,7 @@ int parseline(char *buf, char **argv)
 }
 /* $end parseline */
 
-
+void shellINThandler(int sig) {
+	
+	printf("\nCSE4100-SP-P1> \n");
+}
