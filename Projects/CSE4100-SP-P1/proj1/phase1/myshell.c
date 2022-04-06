@@ -8,11 +8,12 @@
 void eval(char *cmdline);
 int parseline(char *buf, char **argv);
 int builtin_command(char **argv); 
+void shellINThandler(int sig); /* handler to ignore Ctrl+c, Ctrl+z */
 
 int main() 
 {
 	char cmdline[MAXLINE]; /* Command line */
-
+	
 	while (1) {
 		/* Read */
 		printf("CSE4100-SP-P1> ");                   

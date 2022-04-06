@@ -11,7 +11,6 @@ int parseline(char *buf, char **argv);
 int builtin_command(char **argv); 
 void pipe_command(char *argv[][MAXARGS], int pos, int input_fd);
 void shellINThandler(int sig);	/* handler to ignore Ctrl+C, Ctrl+Z */
-int flag;
 
 int main() 
 {
@@ -120,17 +119,20 @@ int builtin_command(char **argv)
 int parseline(char *buf, char **argv) 
 {
 	char *delim;         /* Points to first space delimiter */
+	char *quotes;		 /* Points to the quotes  */
 	int argc;            /* Number of args */
 	int bg;              /* Background job? */
-	char *temp;
-	temp = buf;
 	buf[strlen(buf)-1] = ' ';  /* Replace trailing '\n' with space */
 	while (*buf && (*buf == ' ')) /* Ignore leading spaces */
 		buf++;
 	/* Build the argv list */
 	argc = 0;
-	//printf("%s\n", temp);
 	while ((delim = strchr(buf, ' '))) {
+		if(*buf == '\"') {
+			buf += 1;
+			quotes = strchr(buf, '\"');
+			delim = quotes;
+		}
 		argv[argc++] = buf;
 		*delim = '\0';
 		buf = delim + 1;
@@ -138,10 +140,11 @@ int parseline(char *buf, char **argv)
 			buf++;
 	}
 	argv[argc] = NULL;
-	//	for(int i = 0; i < strlen(buf); i++) {
-	//		if(buf[i] == '\"' || buf[i] == '\'') buf[i] = ' ';
-	//	}
-	//printf("%s\n", argv[1]);
+	int i = 0;
+	while(argv[i]) {
+		printf("%s\n", argv[i]);
+		i++;
+	}
 	if (argc == 0)  /* Ignore blank line */
 		return 1;
 
