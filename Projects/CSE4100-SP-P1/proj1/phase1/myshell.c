@@ -88,7 +88,7 @@ int parseline(char *buf, char **argv)
 	char *quotes;		 /* Points to the quotes  */
 	int argc;            /* Number of args */
 	int bg;              /* Background job? */
-	
+	char temp;	
 
 	buf[strlen(buf)-1] = ' ';  /* Replace trailing '\n' with space */
 	while (*buf && (*buf == ' ')) /* Ignore leading spaces */
@@ -97,9 +97,10 @@ int parseline(char *buf, char **argv)
 	/* Build the argv list */
 	argc = 0;
 	while ((delim = strchr(buf, ' '))) {
-		if(*buf == '\"') {
+		if(*buf == '\"' || *buf == '\'') {
+			temp = *buf;
 			buf += 1;
-			quotes = strchr(buf, '\"');
+			quotes = strchr(buf, temp);
 			delim = quotes;
 		}
 		argv[argc++] = buf;
