@@ -85,7 +85,8 @@ int builtin_command(char **argv)
 int parseline(char *buf, char **argv) 
 {
 	char *delim;         /* Points to first space delimiter */
-	char *quotes;		 /* Points to the quotes  */
+	char *quotes1;		 /* Points to the quotes  */
+	char *quotes2;
 	int argc;            /* Number of args */
 	int bg;              /* Background job? */
 	char temp;	
@@ -100,8 +101,8 @@ int parseline(char *buf, char **argv)
 		if(*buf == '\"' || *buf == '\'') {
 			temp = *buf;
 			buf += 1;
-			quotes = strchr(buf, temp);
-			delim = quotes;
+			quotes1 = strchr(buf, temp);
+			delim = quotes1;
 		}
 		argv[argc++] = buf;
 		*delim = '\0';
