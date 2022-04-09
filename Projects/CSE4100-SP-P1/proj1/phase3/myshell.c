@@ -10,26 +10,60 @@ void eval(char *cmdline);
 int parseline(char *buf, char **argv);
 int builtin_command(char **argv); 
 void pipe_command(char *argv[][MAXARGS], int count, int input_fd);
-void shellINThandler(int sig);	/* handler to ignore Ctrl+C, Ctrl+Z */
 
+/* Signal handlers */
+void SIGINThandler(int sig);
+void SIGTSTPhandler(int sig);
+void SIGCHLDhandler(int sig);
+
+/* Backgroud variables & functions */
+//Job status list
+#define NONE		0
+#define RUNF		1	//running in foreground 
+#define RUNB		2	//running in background
+#define SUSB		3	//suspended in background
+#define DONE		4	//done
+
+typedef struct job {
+	pid_t pid;			//Process ID
+	int id;				//Job ID
+	char cmd[MAXLINE];	//Command
+	int state;			//Job state
+
+} job;
+job jobList[MAXARGS];
+
+void addjob(pid_t pid, char* cmd, int state);
+void clearjob(int i);
+void printjob();
+void donejob();
+
+int numJobs = 1;
+
+/* Begin main */
 int main() 
 {
+	for(int i = 0; i < MAXARGS; i++) {
+		clearjob(i);
+	}
 	char *fgetsR;
 	char cmdline[MAXLINE]; /* Command line */
 	strcpy(path, "/bin/");
 	strcpy(path2, "/usr/bin/");
-	signal(SIGTSTP, shellINThandler);
-	signal(SIGINT, shellINThandler);
 	while (1) {
+		signal(SIGTSTP, SIGINThandler);
+		signal(SIGINT, SIGINThandler);
+		signal(SIGCHLD, SIGCHLDhandler);
 		/* Read */
-		
-		printf("CSE4100-SP-P1> ");
+
+		printf("CSE4100-SP-P1 <%d>> ", numJobs);
 		fgetsR = fgets(cmdline, MAXLINE, stdin);
 		if (feof(stdin)) {
 			exit(0);
 		}
 		/* Evaluate */
 		eval(cmdline);
+		donejob();
 
 	}
 }
@@ -47,6 +81,7 @@ void eval(char *cmdline)
 	char *temp;			 /* Pointer for parsing the command by '|' */
 	pid_t pid;           /* Process id */
 	char pcmd[MAXARGS][MAXLINE]; /* command line parsed for commands with pipe */
+	int state;
 
 	strcpy(buf, cmdline);
 
@@ -64,18 +99,26 @@ void eval(char *cmdline)
 		pcmd[pipe_num][0] = '\0';
 		for(int i = 0; pcmd[i][0] != '\0'; i++) {
 			bg = parseline(pcmd[i], argv[i]);
+			state = bg + 1;
 		}
 		argv[pipe_num][0] = NULL;
 		if((pid = Fork()) == 0) {
 			pipe_command(argv, 0, STDIN_FILENO);
 		}
-		int status;
-		if(waitpid(pid, &status, 0) <0) {
-			unix_error("waitfg: waitpid error");
+		if(!bg) {
+			int status;
+			if(waitpid(pid, &status, 0) <0) {
+				unix_error("waitfg: waitpid error");
+			}
+		}
+		else {
+			printf("%d %s", pid, cmdline);
+			addjob(pid, cmdline, state);
 		}
 	}
 	else {
-		bg = parseline(buf, argv[0]); 
+		bg = parseline(buf, argv[0]);
+		state = bg + 1;
 		if (argv[0][0] == NULL)  
 			return;   /* Ignore empty lines */
 		if (!builtin_command(argv[0])) { //quit -> exit(0), & -> ignore, other -> run
@@ -92,8 +135,10 @@ void eval(char *cmdline)
 				if (waitpid(pid, &status, 0) < 0)
 					unix_error("waitfg: waitpid error");
 			}
-			else//when there is backgrount process!
+			else {//when there is backgrount process!
 				printf("%d %s", pid, cmdline);
+				addjob(pid, cmdline, state);
+			}
 		}
 	}
 	return;
@@ -109,6 +154,11 @@ int builtin_command(char **argv)
 	if(!strcmp(argv[0], "cd")) {	/* Change directory */
 		if(chdir(argv[1]) < 0) printf("cd : No such file or directory\n");
 		return 1;
+	}
+	if(!strcmp(argv[0], "jobs")) {
+		printjob();
+		return 1;
+
 	}
 	return 0;                     /* Not a builtin command */
 }
@@ -151,7 +201,11 @@ int parseline(char *buf, char **argv)
 	/* Should the job run in the background? */
 	if ((bg = (*argv[argc-1] == '&')) != 0)
 		argv[--argc] = NULL;
+	else if(argv[argc - 1][strlen(argv[argc - 1]) - 1] == '&') {
+		bg = 1;
+		argv[argc - 1][strlen(argv[argc - 1]) - 1] = '\0';
 
+	}
 	return bg;
 
 }
@@ -205,7 +259,67 @@ void pipe_command(char *argv[][MAXARGS], int count, int input_fd) {
 	}
 }
 
-void shellINThandler(int sig) {
-	
+void SIGINThandler(int sig) {
+
 	printf("\nCSE4100-SP-P1> \n");
+}
+
+void SIGCHLDhandler(int sig) {
+	//printf("children proc done. \n");
+	pid_t pid;
+	int status;
+	while ((pid = waitpid(-1, &status, WNOHANG | WCONTINUED)) > 0) {
+		if (WIFEXITED(status) || WIFSIGNALED(status)) {
+			for(int i = 1; i < MAXARGS; i++) {
+				if(jobList[i].pid == pid) {
+					jobList[i].state = DONE;
+				}
+			}
+		}
+	}
+}
+
+void addjob(pid_t pid, char* cmd, int state) {
+	printf("\naddjob on\n");
+	//numJobs++;
+	jobList[numJobs].pid = pid;
+	jobList[numJobs].id = numJobs;
+	strcpy(jobList[numJobs].cmd, cmd);
+	jobList[numJobs].state = state;
+	numJobs++;
+}
+
+void clearjob(int i) {
+	jobList[i].pid = 0;
+	jobList[i].id = 0;
+	jobList[i].cmd[0] = '\0';
+	jobList[i].state = NONE;
+
+}
+
+void printjob() {
+	for(int i = 0; i < MAXARGS; i++) {
+		if(jobList[i].state == RUNB) {
+			printf("[%d]\trunning\t%s", jobList[i].id, jobList[i].cmd);
+		}
+		else if(jobList[i].state == SUSB) {
+			printf("[%d]\tsuspended\t%s", jobList[i].id, jobList[i].cmd);
+		}
+	}
+}
+
+void donejob() {
+	for(int i = 0; i < MAXARGS; i++) {
+		if(jobList[i].state == DONE) {
+			printf("[%d]\tDone\t%s", jobList[i].id, jobList[i].cmd);
+			jobList[i].state = NONE;
+		}
+	}
+	int count;
+	for(count = MAXARGS; count > 0; count--) {
+		if(jobList[count].state == RUNF || jobList[count].state == RUNB) {
+			break;
+		}
+		numJobs = count;
+	}
 }
