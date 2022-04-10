@@ -22,7 +22,8 @@ void SIGCHLDhandler(int sig);
 #define RUNF		1	//running in foreground 
 #define RUNB		2	//running in background
 #define SUSB		3	//suspended in background
-#define DONE		4	//done
+#define DONE		4	//Done job
+#define KILL		5	//Killed job
 
 typedef struct job {
 	pid_t pid;			//Process ID
@@ -39,7 +40,8 @@ void printjob();
 void donejob();
 
 int numJobs = 1;
-
+int childpid = -1;
+char tempcmd[MAXLINE];
 /* Begin main */
 int main() 
 {
@@ -51,7 +53,7 @@ int main()
 	strcpy(path, "/bin/");
 	strcpy(path2, "/usr/bin/");
 	while (1) {
-		signal(SIGTSTP, SIGINThandler);
+		signal(SIGTSTP, SIGTSTPhandler);
 		signal(SIGINT, SIGINThandler);
 		signal(SIGCHLD, SIGCHLDhandler);
 		/* Read */
@@ -83,6 +85,7 @@ void eval(char *cmdline)
 	char pcmd[MAXARGS][MAXLINE]; /* command line parsed for commands with pipe */
 	int state;
 
+
 	strcpy(buf, cmdline);
 
 	if((pipe = strchr(buf, '|'))) {
@@ -103,6 +106,12 @@ void eval(char *cmdline)
 		}
 		argv[pipe_num][0] = NULL;
 		if((pid = Fork()) == 0) {
+			if(bg == 0) {
+				signal(SIGINT, SIG_DFL);
+			}
+			else {
+				signal(SIGINT, SIG_IGN);
+			}
 			pipe_command(argv, 0, STDIN_FILENO);
 		}
 		if(!bg) {
@@ -123,6 +132,15 @@ void eval(char *cmdline)
 			return;   /* Ignore empty lines */
 		if (!builtin_command(argv[0])) { //quit -> exit(0), & -> ignore, other -> run
 			if((pid = Fork()) == 0) {
+				if(bg == 0) {
+					signal(SIGINT, SIG_DFL);
+					signal(SIGTSTP, SIGTSTPhandler);
+				}
+				else {
+					childpid = getpid();
+					signal(SIGINT, SIG_IGN);
+					signal(SIGTSTP, SIG_IGN);
+				}
 				if((execve(strcat(path, argv[0][0]), argv[0], environ) < 0) && (execve(strcat(path2, argv[0][0]), argv[0], environ) < 0)) {	//ex) /bin/ls ls -al &
 					printf("%s: Command not found.\n", argv[0][0]);
 					exit(0);
@@ -130,9 +148,12 @@ void eval(char *cmdline)
 			}
 
 			/* Parent waits for foreground job to terminate */
-			if (!bg){ 
+			if (!bg){
+				childpid = pid;
+				strcpy(tempcmd, cmdline);
+				//printf("pid : %d\ncmd : %s\n", childpid);
 				int status;
-				if (waitpid(pid, &status, 0) < 0)
+				if (waitpid(pid, &status, WUNTRACED) < 0)
 					unix_error("waitfg: waitpid error");
 			}
 			else {//when there is backgrount process!
@@ -158,8 +179,102 @@ int builtin_command(char **argv)
 	if(!strcmp(argv[0], "jobs")) {
 		printjob();
 		return 1;
-
 	}
+	if(!strcmp(argv[0], "kill")) {
+		int jobId;
+		int status;
+		if(!argv[1]) {
+			printf("Usage : kill %%job id\n");
+			return 1;
+		}
+		if(argv[1][0] != '%') {
+			printf("Usage : kill %%job id\n");
+			return 1;
+		}
+		if(argv[1][1]) {
+			jobId = atoi(&argv[1][1]);
+			if(jobList[jobId].state == NONE) {
+				printf("No Such Job\n");
+				return 1;
+			}
+			else {
+				Kill(jobList[jobId].pid, SIGKILL);
+				jobList[jobId].state = KILL;
+				return 1;
+			}
+		}
+		else {
+			printf("Usage : kill %%job id\n");
+			return 1;
+		}
+	}
+	if(!strcmp(argv[0], "bg")) {
+		int jobId;
+		int status;
+		if(!argv[1]) {
+			printf("Usage : bg %%job id\n");
+			return 1;
+		}
+		if(argv[1][0] != '%') {
+			printf("Usage : bg %%job id\n");
+			return 1;
+		}
+		if(argv[1][1]) {
+			jobId = atoi(&argv[1][1]);
+			if(jobList[jobId].state == NONE || jobList[jobId].state == DONE || jobList[jobId].state == KILL) {
+				printf("No Such Job\n");
+				return 1;
+			}
+			else if(jobList[jobId].state == RUNB) {
+				printf("Already Running\n");
+				return 1;
+			}
+			else {
+				printf("[%d]\trunning  \t%s", jobList[jobId].id, jobList[jobId].cmd);
+				Kill(jobList[jobId].pid, SIGCONT);
+				jobList[jobId].state = RUNB;
+				return 1;
+			}
+		}
+		return 1;
+	}
+	if(!strcmp(argv[0], "fg")) {
+		int jobId;
+		int status;
+		if(!argv[1]) {
+			printf("Usage : fg %%job id\n");
+			return 1;
+		}
+		if(argv[1][0] != '%') {
+			printf("Usage : fg %%job id\n");
+			return 1;
+		}
+		if(argv[1][1]) {
+			jobId = atoi(&argv[1][1]);
+			if(jobList[jobId].state == NONE || jobList[jobId].state == DONE || jobList[jobId].state == KILL) {
+				printf("No Such Job\n");
+				return 1;
+			}
+			else if(jobList[jobId].state == RUNF) {
+				printf("Already Running\n");
+				return 1;
+			}
+			else if(jobList[jobId].state == SUSB || jobList[jobId].state == RUNB){
+				Kill(jobList[jobId].pid, SIGCONT);
+				jobList[jobId].state = RUNF;
+				printf("[%d]\trunning  \t%s", jobList[jobId].id, jobList[jobId].cmd);
+				while(1) {
+					if(jobList[jobId].state != RUNF) {
+						break;
+					}
+				}
+				//return 1;
+			}
+		}
+		return 1;
+	}
+
+
 	return 0;                     /* Not a builtin command */
 }
 /* $end eval */
@@ -258,30 +373,40 @@ void pipe_command(char *argv[][MAXARGS], int count, int input_fd) {
 			unix_error("waitfg: waitpid error");
 	}
 }
-
 void SIGINThandler(int sig) {
-
 	printf("\nCSE4100-SP-P1> \n");
 }
 
 void SIGCHLDhandler(int sig) {
-	//printf("children proc done. \n");
 	pid_t pid;
 	int status;
 	while ((pid = waitpid(-1, &status, WNOHANG | WCONTINUED)) > 0) {
 		if (WIFEXITED(status) || WIFSIGNALED(status)) {
-			for(int i = 1; i < MAXARGS; i++) {
-				if(jobList[i].pid == pid) {
+			for(int i = 0; i < MAXARGS; i++) {
+				if(jobList[i].pid == pid && jobList[i].state != NONE) {
 					jobList[i].state = DONE;
+					//printf("state : %d\n", jobList[i].state);
+					
 				}
 			}
 		}
 	}
 }
 
+void SIGTSTPhandler(int sig) {
+	pid_t pid;
+	int status;
+	if(childpid == -1) return;
+	kill(childpid, SIGSTOP);
+	addjob(childpid, tempcmd, SUSB);
+	
+
+	childpid = -1;
+}
+
+
+
 void addjob(pid_t pid, char* cmd, int state) {
-	printf("\naddjob on\n");
-	//numJobs++;
 	jobList[numJobs].pid = pid;
 	jobList[numJobs].id = numJobs;
 	strcpy(jobList[numJobs].cmd, cmd);
@@ -300,7 +425,7 @@ void clearjob(int i) {
 void printjob() {
 	for(int i = 0; i < MAXARGS; i++) {
 		if(jobList[i].state == RUNB) {
-			printf("[%d]\trunning\t%s", jobList[i].id, jobList[i].cmd);
+			printf("[%d]\trunning  \t%s", jobList[i].id, jobList[i].cmd);
 		}
 		else if(jobList[i].state == SUSB) {
 			printf("[%d]\tsuspended\t%s", jobList[i].id, jobList[i].cmd);
@@ -311,13 +436,16 @@ void printjob() {
 void donejob() {
 	for(int i = 0; i < MAXARGS; i++) {
 		if(jobList[i].state == DONE) {
-			printf("[%d]\tDone\t%s", jobList[i].id, jobList[i].cmd);
+			printf("[%d]\tDone     \t%s", jobList[i].id, jobList[i].cmd);
+			jobList[i].state = NONE;
+		}
+		else if(jobList[i].state == KILL) {
 			jobList[i].state = NONE;
 		}
 	}
 	int count;
-	for(count = MAXARGS; count > 0; count--) {
-		if(jobList[count].state == RUNF || jobList[count].state == RUNB) {
+	for(count = MAXARGS - 1; count > 0; count--) {
+		if(jobList[count].state == RUNF || jobList[count].state == RUNB || jobList[count].state == SUSB) {
 			break;
 		}
 		numJobs = count;
