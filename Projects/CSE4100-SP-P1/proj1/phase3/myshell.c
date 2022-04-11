@@ -58,7 +58,7 @@ int main()
 		signal(SIGCHLD, SIGCHLDhandler);
 		/* Read */
 
-		printf("CSE4100-SP-P1 <%d>> ", numJobs);
+		printf("CSE4100-SP-P1 > ");
 		fgetsR = fgets(cmdline, MAXLINE, stdin);
 		if (feof(stdin)) {
 			exit(0);

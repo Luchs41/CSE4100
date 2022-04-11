@@ -116,7 +116,7 @@ void eval(char *cmdline)
 				signal(SIGTSTP, SIG_IGN);
 			}
 			pipe_command(argv, 0, STDIN_FILENO, bg);
-	
+
 		}
 		if(!bg) {
 			childpid = pid;
@@ -348,9 +348,15 @@ void pipe_command(char *argv[][MAXARGS], int count, int input_fd, int bg) {
 		Dup2(input_fd, STDIN_FILENO);
 		Close(input_fd);
 		if(!builtin_command(argv[count])) {
-			if((execve(strcat(path, argv[count][0]), argv[count], environ) < 0) && (execve(strcat(path2, argv[count][0]), argv[count], environ) < 0)) {
-				printf("%s: Command not found.\n", argv[count][0]);
-				exit(0);
+			if((pid = Fork()) == 0) {
+				if((execve(strcat(path, argv[count][0]), argv[count], environ) < 0) && (execve(strcat(path2, argv[count][0]), argv[count], environ) < 0)) {
+					printf("%s: Command not found.\n", argv[count][0]);
+					exit(0);
+				}
+			}
+			int status;
+			if (waitpid(pid, &status, WUNTRACED) < 0) {
+				unix_error("waitfg: waitpid error");
 			}
 		}
 		exit(0);
@@ -381,6 +387,7 @@ void pipe_command(char *argv[][MAXARGS], int count, int input_fd, int bg) {
 
 		int status;
 		Close(fd[1]);
+		printf("tttttest\n");
 		pipe_command(argv, count + 1, fd[0], bg);
 		if(waitpid(pid, &status, 0) < 0)
 			unix_error("waitfg: waitpid error");
@@ -402,7 +409,7 @@ void SIGCHLDhandler(int sig) {
 			for(int i = 0; i < MAXARGS; i++) {
 				if(jobList[i].pid == pid && jobList[i].state != NONE) {
 					jobList[i].state = DONE;
-					
+
 				}
 			}
 		}
@@ -415,7 +422,7 @@ void SIGTSTPhandler(int sig) {
 	if(childpid == -1) return;
 	kill(childpid, SIGSTOP);
 	addjob(childpid, tempcmd, SUSB);
-	
+
 
 	childpid = -1;
 }

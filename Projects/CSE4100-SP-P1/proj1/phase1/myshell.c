@@ -16,10 +16,10 @@ int main()
 	char cmdline[MAXLINE]; /* Command line */
 	strcpy(path, "/bin/");
 	strcpy(path2, "/usr/bin/");
-	signal(SIGTSTP, shellINThandler);
-	signal(SIGINT, shellINThandler);
 	while (1) {
 		/* Read */
+		signal(SIGTSTP, shellINThandler);
+		signal(SIGINT, shellINThandler);
 		printf("CSE4100-SP-P1> ");                   
 		fgets(cmdline, MAXLINE, stdin); 
 		if (feof(stdin))
@@ -47,6 +47,8 @@ void eval(char *cmdline)
 		return;   /* Ignore empty lines */
 	if (!builtin_command(argv)) { //quit -> exit(0), & -> ignore, other -> run
 		if((pid = Fork()) == 0) {
+			signal(SIGINT, SIG_DFL);
+			signal(SIGTSTP, SIG_IGN);
 			if((execve(strcat(path, argv[0]), argv, environ) < 0) && (execve(strcat(path2, argv[0]), argv, environ) < 0)) {	//ex) /bin/ls ls -al &
 				printf("%s: Command not found.\n", argv[0]);
 				exit(0);
