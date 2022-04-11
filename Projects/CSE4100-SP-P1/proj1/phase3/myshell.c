@@ -9,7 +9,7 @@ char path2[MAXLINE];	/* Default command path : /usr/bin */
 void eval(char *cmdline);
 int parseline(char *buf, char **argv);
 int builtin_command(char **argv); 
-void pipe_command(char *argv[][MAXARGS], int count, int input_fd);
+void pipe_command(char *argv[][MAXARGS], int count, int input_fd, int bg);
 
 /* Signal handlers */
 void SIGINThandler(int sig);
@@ -108,16 +108,25 @@ void eval(char *cmdline)
 		if((pid = Fork()) == 0) {
 			if(bg == 0) {
 				signal(SIGINT, SIG_DFL);
+				signal(SIGTSTP, SIGTSTPhandler);
 			}
 			else {
+				childpid = getpid();
 				signal(SIGINT, SIG_IGN);
+				signal(SIGTSTP, SIG_IGN);
 			}
-			pipe_command(argv, 0, STDIN_FILENO);
+			pipe_command(argv, 0, STDIN_FILENO, bg);
+	
 		}
 		if(!bg) {
+			childpid = pid;
+			strcpy(tempcmd, cmdline);
 			int status;
-			if(waitpid(pid, &status, 0) <0) {
+			if(waitpid(pid, &status, WUNTRACED) < 0) {
 				unix_error("waitfg: waitpid error");
+			}
+			if(WIFEXITED(status)) {
+				childpid = -1;
 			}
 		}
 		else {
@@ -151,10 +160,14 @@ void eval(char *cmdline)
 			if (!bg){
 				childpid = pid;
 				strcpy(tempcmd, cmdline);
-				//printf("pid : %d\ncmd : %s\n", childpid);
 				int status;
-				if (waitpid(pid, &status, WUNTRACED) < 0)
+				if (waitpid(pid, &status, WUNTRACED) < 0) {
 					unix_error("waitfg: waitpid error");
+				}
+				if(WIFEXITED(status)) {
+					childpid = -1;
+				}
+
 			}
 			else {//when there is backgrount process!
 				printf("%d %s", pid, cmdline);
@@ -326,7 +339,7 @@ int parseline(char *buf, char **argv)
 }
 /* $end parseline */
 
-void pipe_command(char *argv[][MAXARGS], int count, int input_fd) {
+void pipe_command(char *argv[][MAXARGS], int count, int input_fd, int bg) {
 	int fd[2];
 	pid_t pid;
 	int pipe_ret;
@@ -368,9 +381,13 @@ void pipe_command(char *argv[][MAXARGS], int count, int input_fd) {
 
 		int status;
 		Close(fd[1]);
-		pipe_command(argv, count + 1, fd[0]);
+		pipe_command(argv, count + 1, fd[0], bg);
 		if(waitpid(pid, &status, 0) < 0)
 			unix_error("waitfg: waitpid error");
+		while(1) {	//test
+			printf("hi");
+			if(WIFEXITED(status)) break;
+		}
 	}
 }
 void SIGINThandler(int sig) {
@@ -385,7 +402,6 @@ void SIGCHLDhandler(int sig) {
 			for(int i = 0; i < MAXARGS; i++) {
 				if(jobList[i].pid == pid && jobList[i].state != NONE) {
 					jobList[i].state = DONE;
-					//printf("state : %d\n", jobList[i].state);
 					
 				}
 			}
