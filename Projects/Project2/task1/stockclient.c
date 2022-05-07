@@ -21,9 +21,19 @@ int main(int argc, char **argv)
     Rio_readinitb(&rio, clientfd);
 
     while (Fgets(buf, MAXLINE, stdin) != NULL) {
+		if(!strcmp(buf, "exit\n")) break;
 		Rio_writen(clientfd, buf, strlen(buf));
-		Rio_readlineb(&rio, buf, MAXLINE);
-		Fputs(buf, stdout);
+		if(!strcmp(buf, "show\n")) {
+			while(1) {
+				Rio_readlineb(&rio, buf, MAXLINE);
+				if(!strcmp(buf, "\n")) break;
+				Fputs(buf, stdout);
+			}
+		}
+		else {
+			Rio_readlineb(&rio, buf, MAXLINE);
+			Fputs(buf, stdout);
+		}
     }
     Close(clientfd); //line:netp:echoclient:close
     exit(0);
