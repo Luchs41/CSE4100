@@ -72,7 +72,8 @@ int main(int argc, char **argv)
 				//strcpy(buf, "buy 1 2\n");
 			
 				Rio_writen(clientfd, buf, strlen(buf));
-				Rio_readlineb(&rio, buf, MAXLINE);
+				// Rio_readlineb(&rio, buf, MAXLINE);
+				Rio_readnb(&rio, buf, MAXLINE);
 				Fputs(buf, stdout);
 
 				usleep(1000000);
