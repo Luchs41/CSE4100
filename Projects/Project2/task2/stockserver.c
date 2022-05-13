@@ -6,6 +6,21 @@
 
 void echo(int connfd);
 
+typedef struct {
+	int buf*;		/* Buffer array */
+	int n;			/* Maximum number of slots */
+	int front;		/* buf[(front + 1) % n] is first item */
+	int rear;		/* buf[rear % n] is last item */
+	sem_t mutex;	/* Protects accesses to buf */
+	sem_t slots;	/* Counts available slots */
+	sem_t items;	/* Counts available items */
+} sbuf_t;
+
+void sbuf_init(sbuf_t *sp, int n);
+void sbuf_deinit(sbuf_t *sp);
+void sbuf_insert(sbuf_t *sp, int item);
+int sbuf_remove(sbuf_t *sp);
+
 struct item {	//structure for each stock data
 	int ID;
 	int left_stock;
@@ -36,13 +51,20 @@ void bufClear() {
 	}
 }
 
+sbuf_t sbuf;	/* Shared buffer of connected descriptors */
+
+void *thread(void *vargp);
+void echo_cnt(int connfd);
+static int byte_cnt;
+static sem_t mutex;
+static void init_echo_cnt(void);
 int main(int argc, char **argv) 
 {
-    int listenfd, connfd;
+    int i, listenfd, connfd;
     socklen_t clientlen;
     struct sockaddr_storage clientaddr;  /* Enough space for any address */  //line:netp:echoserveri:sockaddrstorage
     char client_hostname[MAXLINE], client_port[MAXLINE];
-	
+	pthread_t tid;
 
 	FILE* fp = fopen("stock.txt", "r");
 	if(!fp) {
@@ -61,15 +83,17 @@ int main(int argc, char **argv)
 		fscanf(fp, "%d %d %d", &id, &left, &price);
 		root = insertNode(root, id, left, price);
 	}
-	inorder(root);
+	inorder(root);//test
     listenfd = Open_listenfd(argv[1]);
+	sbuf_init(&buf, SBUFSIZE);
+	for(i = 0; i < NTHREADS; i++)	/* Create worker threads */
+		Pthread_create(&tid, NULL, thread, NULL);
     while (1) {
 		clientlen = sizeof(struct sockaddr_storage); 
 		connfd = Accept(listenfd, (SA *)&clientaddr, &clientlen);
+		sbuf_insert(&sbuf, connfd);	/* Insert connfd in buffer */
 	    Getnameinfo((SA *) &clientaddr, clientlen, client_hostname, MAXLINE, client_port, MAXLINE, 0);
 		printf("Connected to (%s, %s)\n", client_hostname, client_port);
-		echo(connfd);
-		Close(connfd);
     }
     exit(0);
 }
@@ -147,5 +171,78 @@ void updateFile(FILE* fp, tree_pointer ptr) {
 		updateFile(fp, ptr->left);
 		fprintf(fp, "%d %d %d\n", ptr->data.ID, ptr->data.left_stock, ptr->data.price);
 		updateFile(fp, ptr->right);
+	}
+}
+
+void sbuf_init(sbuf_t *sp, int n) {
+	sp->buf = Calloc(n, sizeof(int));
+	sp->n = n;					/* Buffer holds max of n items */
+	sp->front = sp->rear = 0;	/* Empty buffer iff front == rear */
+	Sem_init(&sp->mutex, 0, 1);	/* Binary semaphore for locking */
+	Sem_init(&sp->slots, 0, n);	/* Initially, buf has n empty slots */
+	Sem_init(&sp->items, 0, 0);	/* Initially, buf has 0 items */
+}
+void sbuf_deinit(sbuf_t *sp) {
+	Free(sp->buf);
+}
+void sbuf_insert(sbuf_t *sp, int item) {
+	P(&sp->slots);							/* Wait for available slot */
+	P(&sp->mutex);							/* Lock the buffer */
+	sp->buf[(++sp->rear) % (sp->n)] = item;	/* Insert the item */
+	V(&sp->mutex);							/* Unlock the buffer */
+	V(&sp->items);							/* Announce available item */
+}
+int sbuf_remove(sbuf_t *sp) {
+	int item;
+	P(&sp->items);							/* Wait for available item */
+	P(&sp->mutex);							/* Lock the buffer */
+	item = sp->buf[(++sp->front)%(sp->n)];	/* Remove the item */
+	V(&sp->mutex);							/* Unlock the buffer */
+	V(&sp->slots);							/* Announce available slot */
+	return item;
+}
+
+void *thread(void *vargp) {
+	Pthread_detach(pthread_self());
+	while(1) {
+		int connfd = sbuf_remove(&sbuf);	/* Remove connfd from buf */
+		echo_cnt(connfd);					/* Service client */
+		Close(connfd);
+	}
+}
+
+static void init_echo_cnt(void) {
+	Sem_init(&mutex, 0, 1);
+	byte_cnt = 0;
+}
+
+void echo_cnt(int connfd) {
+	int n;
+	char buf[MAXLINE];
+	rio_t rio;
+	static pthread_once_t once = PTHREAD_ONCE_INIT;
+	char command[5];
+	int sID = 0; int sNum = 0;
+	Pthread_once(&once, init_echo_cnt);
+	Rio_readinitb(&rio, connfd);
+	while((n = Rio_readlineb(&rio, buf, MAXLINE)) != 0) {
+		command[0] = 0; sID = 0; sNum = 0;
+		sscanf(buf, "%s %d %d", command, &sID, &sNum);
+		P(&mutex);
+		byte_cnt += n;
+		printf("%d bytes\n", n);
+		V(&mutex);
+		if(!strcmp(command, "show")) {
+			show(connfd, root);
+			Rio_writen(connfd, showBuf, MAXLINE);
+			bufClear();
+		}
+		else if(!strcmp(command, "buy")) {
+			buy(connfd, root, sID, sNum);
+		}
+		else if(!strcmp(command, "sell")) {
+			sell(connfd, root, sID, sNum);
+		}
+		bufClear();
 	}
 }
