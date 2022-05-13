@@ -22,7 +22,20 @@ typedef struct node *tree_pointer;
 
 tree_pointer insertNode(tree_pointer ptr, int newID, int newLeft, int newPrice);
 void inorder(tree_pointer ptr);
+void updateFile(FILE* fp, tree_pointer ptr);
+tree_pointer search(tree_pointer ptr, int id);
 tree_pointer root = NULL;
+
+void buy(int connfd, tree_pointer ptr, int id, int num);
+void sell(int connfd, tree_pointer ptr, int id, int num);
+void show(int connfd, tree_pointer ptr);
+char showBuf[MAXLINE];
+void bufClear() {
+	for(int i = 0; i < MAXLINE; i++) {
+		showBuf[i] = '\0';
+	}
+}
+
 int main(int argc, char **argv) 
 {
     int listenfd, connfd;
@@ -86,5 +99,53 @@ void inorder(tree_pointer ptr) {
 		inorder(ptr->left);
 		fprintf(stdout, "%d %d %d\n", ptr->data.ID, ptr->data.left_stock, ptr->data.price);
 		inorder(ptr->right);
+	}
+}
+
+void show(int connfd, tree_pointer ptr) {
+	char buf[MAXLINE];
+	if(ptr) {
+		show(connfd, ptr->left);
+		sprintf(buf, "%d %d %d\n", ptr->data.ID, ptr->data.left_stock, ptr->data.price);
+		strcat(showBuf, buf);
+		show(connfd, ptr->right);
+	}
+
+}
+
+tree_pointer search(tree_pointer ptr, int id) {
+	while(ptr && ptr->data.ID != id) {
+		if(ptr->data.ID > id) ptr = ptr->left;
+		else if(ptr->data.ID < id) ptr = ptr->right;
+	}
+	return ptr;
+}
+
+void buy(int connfd, tree_pointer ptr, int id, int num) {
+	ptr = search(ptr, id);
+	char buf[MAXLINE];
+	if(ptr->data.left_stock >= num) {
+		ptr->data.left_stock -= num;
+		sprintf(buf, "[buy] success\n");
+		Rio_writen(connfd, buf, MAXLINE);
+	}
+	else {
+		sprintf(buf, "Not enough left stock\n");
+		Rio_writen(connfd, buf, MAXLINE);
+	}
+	
+}
+void sell(int connfd, tree_pointer ptr, int id, int num) {
+	ptr = search(ptr, id);
+	ptr->data.left_stock += num;
+	char buf[MAXLINE];
+	sprintf(buf, "[sell] success\n");
+	Rio_writen(connfd, buf, MAXLINE);
+}
+void updateFile(FILE* fp, tree_pointer ptr) {
+	if(ptr) {
+		updateFile(fp, ptr->left);
+		fprintf(fp, "%d %d %d\n", ptr->data.ID, ptr->data.left_stock, ptr->data.price);
+		updateFile(fp, ptr->right);
 	}
 }
