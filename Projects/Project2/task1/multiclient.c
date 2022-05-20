@@ -23,7 +23,10 @@ int main(int argc, char **argv)
 	host = argv[1];
 	port = argv[2];
 	num_client = atoi(argv[3]);
-
+	struct timeval start;
+	struct timeval end;
+	unsigned long e_usec;
+	gettimeofday(&start, 0);
 /*	fork for each client process	*/
 	while(runprocess < num_client){
 		//wait(&state);
@@ -105,6 +108,8 @@ int main(int argc, char **argv)
 
 	Close(clientfd); //line:netp:echoclient:close
 	exit(0);*/
-
+	gettimeofday(&end, 0);
+	e_usec = ((end.tv_sec * 1000000) + end.tv_usec) - ((start.tv_sec * 1000000) + start.tv_usec);
+	printf("elapsed time: %lu microseconds\n", e_usec);
 	return 0;
 }
