@@ -4,10 +4,13 @@
 /* $begin stockserverimain */
 #include "csapp.h"
 
+#define SBUFSIZE 128
+#define NTHREADS 64
+
 void echo(int connfd);
 
 typedef struct {
-	int buf*;		/* Buffer array */
+	int *buf;		/* Buffer array */
 	int n;			/* Maximum number of slots */
 	int front;		/* buf[(front + 1) % n] is first item */
 	int rear;		/* buf[rear % n] is last item */
@@ -26,7 +29,7 @@ struct item {	//structure for each stock data
 	int left_stock;
 	int price;
 	int readcnt;
-	sem_t mutex;
+	sem_t mutex, w;
 };
 
 struct node {
@@ -85,7 +88,7 @@ int main(int argc, char **argv)
 	}
 	inorder(root);//test
     listenfd = Open_listenfd(argv[1]);
-	sbuf_init(&buf, SBUFSIZE);
+	sbuf_init(&sbuf, SBUFSIZE);
 	for(i = 0; i < NTHREADS; i++)	/* Create worker threads */
 		Pthread_create(&tid, NULL, thread, NULL);
     while (1) {
@@ -108,6 +111,9 @@ tree_pointer insertNode(tree_pointer ptr, int newID, int newLeft, int newPrice) 
 		ptr->data.price = newPrice;
 		ptr->left = NULL;
 		ptr->right = NULL;
+		ptr->data.readcnt = 0;
+		Sem_init(&ptr->data.mutex, 0, 1);
+		Sem_init(&ptr->data.w, 0, 1);
 	}
 	else if(ptr->data.ID < newID) {
 		ptr->right = insertNode(ptr->right, newID, newLeft, newPrice);
@@ -130,8 +136,20 @@ void show(int connfd, tree_pointer ptr) {
 	char buf[MAXLINE];
 	if(ptr) {
 		show(connfd, ptr->left);
+		
+		P(&ptr->data.mutex);
+		ptr->data.readcnt++;
+		if(ptr->data.readcnt == 1)
+			P(&ptr->data.w);
+		V(&ptr->data.mutex);
 		sprintf(buf, "%d %d %d\n", ptr->data.ID, ptr->data.left_stock, ptr->data.price);
 		strcat(showBuf, buf);
+		P(&ptr->data.mutex);
+		ptr->data.readcnt--;
+		if(ptr->data.readcnt == 0)
+			V(&ptr->data.w);
+		V(&ptr->data.mutex);
+
 		show(connfd, ptr->right);
 	}
 
@@ -147,6 +165,7 @@ tree_pointer search(tree_pointer ptr, int id) {
 
 void buy(int connfd, tree_pointer ptr, int id, int num) {
 	ptr = search(ptr, id);
+	P(&ptr->data.w);
 	char buf[MAXLINE];
 	if(ptr->data.left_stock >= num) {
 		ptr->data.left_stock -= num;
@@ -157,19 +176,35 @@ void buy(int connfd, tree_pointer ptr, int id, int num) {
 		sprintf(buf, "Not enough left stock\n");
 		Rio_writen(connfd, buf, MAXLINE);
 	}
-	
+	V(&ptr->data.w);
 }
 void sell(int connfd, tree_pointer ptr, int id, int num) {
 	ptr = search(ptr, id);
+	P(&ptr->data.w);
 	ptr->data.left_stock += num;
 	char buf[MAXLINE];
 	sprintf(buf, "[sell] success\n");
 	Rio_writen(connfd, buf, MAXLINE);
+	V(&ptr->data.w);
 }
 void updateFile(FILE* fp, tree_pointer ptr) {
 	if(ptr) {
 		updateFile(fp, ptr->left);
+
+		P(&ptr->data.mutex);
+		ptr->data.readcnt++;
+		if(ptr->data.readcnt == 1)
+			P(&ptr->data.w);
+		V(&ptr->data.mutex);
+
 		fprintf(fp, "%d %d %d\n", ptr->data.ID, ptr->data.left_stock, ptr->data.price);
+
+		P(&ptr->data.mutex);
+		ptr->data.readcnt--;
+		if(ptr->data.readcnt == 0)
+			V(&ptr->data.w);
+		V(&ptr->data.mutex);
+
 		updateFile(fp, ptr->right);
 	}
 }
@@ -224,14 +259,15 @@ void echo_cnt(int connfd) {
 	char command[5];
 	int sID = 0; int sNum = 0;
 	Pthread_once(&once, init_echo_cnt);
+	bufClear();
 	Rio_readinitb(&rio, connfd);
 	while((n = Rio_readlineb(&rio, buf, MAXLINE)) != 0) {
 		command[0] = 0; sID = 0; sNum = 0;
 		sscanf(buf, "%s %d %d", command, &sID, &sNum);
-		P(&mutex);
-		byte_cnt += n;
+		//P(&mutex);
+		//byte_cnt += n;
 		printf("%d bytes\n", n);
-		V(&mutex);
+		//V(&mutex);
 		if(!strcmp(command, "show")) {
 			show(connfd, root);
 			Rio_writen(connfd, showBuf, MAXLINE);
@@ -243,6 +279,13 @@ void echo_cnt(int connfd) {
 		else if(!strcmp(command, "sell")) {
 			sell(connfd, root, sID, sNum);
 		}
+		else if(!strcmp(command, "exit")) {
+			bufClear();
+			break;
+		}
+		FILE* fp = fopen("stock.txt", "w");
+		updateFile(fp, root);
+		fclose(fp);
 		bufClear();
 	}
 }

@@ -75,7 +75,7 @@ int main(int argc, char **argv)
 		root = insertNode(root, id, left, price);
 	}
 	fclose(fp);
-	inorder(root);
+	//inorder(root);
 	// end of reading data
 	
     listenfd = Open_listenfd(argv[1]);
@@ -152,7 +152,6 @@ void add_client(int connfd, pool *p) {
 	p->nready--;
 	for(i = 0; i < FD_SETSIZE; i++) /* Find an available slot */
 		if(p->clientfd[i] < 0) {
-			printf("add\n");//test
 			/* Add connected descriptor to the pool */
 			p->clientfd[i] = connfd;
 			Rio_readinitb(&p->clientrio[i], connfd);
@@ -186,7 +185,7 @@ void check_clients(pool *p) {
 			if((n = Rio_readlineb(&rio, buf, MAXLINE)) != 0 && strcmp(buf, "exit\n") != 0) {
 				command[0] = 0; sID = 0; sNum = 0;
 				sscanf(buf, "%s %d %d", command, &sID, &sNum);
-				fprintf(stdout, "%d bytes\n", n);
+				fprintf(stdout, "received %d bytes\n", n);
 				if(!strcmp(command, "show")) {
 					show(connfd, root);
 					Rio_writen(connfd, showBuf, MAXLINE);
