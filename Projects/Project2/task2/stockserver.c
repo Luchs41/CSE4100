@@ -5,7 +5,7 @@
 #include "csapp.h"
 
 #define SBUFSIZE 128
-#define NTHREADS 64
+#define NTHREADS 1
 
 void echo(int connfd);
 
@@ -86,7 +86,7 @@ int main(int argc, char **argv)
 		fscanf(fp, "%d %d %d", &id, &left, &price);
 		root = insertNode(root, id, left, price);
 	}
-	inorder(root);//test
+	//inorder(root);//test
     listenfd = Open_listenfd(argv[1]);
 	sbuf_init(&sbuf, SBUFSIZE);
 	for(i = 0; i < NTHREADS; i++)	/* Create worker threads */
